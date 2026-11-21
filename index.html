@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RigKit PC Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: a patient bench tech — plain, exact, a little playful when something goes wrong.
+   IDEA: an anti-static workbench mat with the open case on it, plus a motherboard's debug LEDs.
+   PICTURE: live 3D bench — parts fly into the case step by step, fans spin when it POSTs.
+   COLOUR and TYPE: ESD-mat blue field, white/graphite panels, one power-LED red; Archivo 800 + 400.
+   LAYOUT: steps | 3D bench | parts + monitor; stacks to bench, step, parts below 900px. */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#121416);--ink:light-dark(#121416,#eceff2);--mute:light-dark(#5b636b,#9aa3ab);--line:light-dark(#e2e5e8,#2a2f34);--panel:light-dark(#f5f6f7,#1a1d20);--mat:#2c5ccf;--matd:#1f47a8;--led:#e5402a;--warn:#d98a00;--ok:#2c5ccf}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Archivo,system-ui,sans-serif;overflow-x:clip}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding:12px max(2vw,14px);border-bottom:1px solid var(--line)}
+.logo{font-weight:800;font-size:26px;letter-spacing:-.02em;line-height:1}.logo b{color:var(--mat)}
+header p{margin:0;color:var(--mute);font-size:14px;flex:1 1 240px}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+button,select{font:inherit;font-size:15px;min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:0 14px;cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--mat);outline-offset:2px}
+button.pri{background:var(--mat);border-color:var(--mat);color:#fff;font-weight:600}
+button.red{background:var(--led);border-color:var(--led);color:#fff;font-weight:600}
+button:disabled{opacity:.45;cursor:not-allowed}
+main{display:grid;grid-template-columns:300px minmax(0,1fr) 330px;min-height:calc(100vh - 70px)}
+aside{padding:16px;overflow:auto;max-height:calc(100vh - 70px)}
+#left{border-right:1px solid var(--line)}#right{border-left:1px solid var(--line)}
+h2{font-size:13px;font-weight:600;color:var(--mute);margin:0 0 8px}
+h3{font-size:22px;line-height:1.15;margin:4px 0 8px;text-wrap:balance}
+ol.steps{list-style:none;margin:0 0 16px;padding:0;display:grid;gap:2px}
+ol.steps li{display:flex;gap:10px;align-items:center;font-size:14px;padding:6px 8px;border-radius:8px;color:var(--mute)}
+ol.steps li.cur{background:var(--panel);color:var(--ink);font-weight:600}
+ol.steps li.done{color:var(--ink)}
+.dot{flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:11px;font-weight:800}
+li.done .dot{background:var(--mat);border-color:var(--mat);color:#fff}li.cur .dot{border-color:var(--mat);color:var(--mat)}
+li.warn .dot{background:var(--warn);border-color:var(--warn)}
+.card{background:var(--panel);border-radius:14px;padding:14px}
+.card p{margin:0 0 10px;font-size:15px}
+.opt{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--line);border-radius:10px;margin:6px 0;background:var(--bg);cursor:pointer;font-size:15px}
+.opt input{width:20px;height:20px;margin:2px 0 0;flex:none;accent-color:var(--mat)}
+.note{font-size:13px;color:var(--mute)}
+.msg{font-size:14px;border-radius:10px;padding:10px;margin-top:10px;background:var(--bg);border-left:4px solid var(--warn)}
+.msg.bad{border-color:var(--led)}.msg.good{border-color:var(--mat)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+#stage{position:relative;background:linear-gradient(#e9eef8,#cfdaf3);overflow:hidden;min-height:420px}
+:root[data-theme=dark] #stage{background:linear-gradient(#1b2230,#111622)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) #stage{background:linear-gradient(#1b2230,#111622)}}
+#stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.hud{position:absolute;left:12px;bottom:12px;right:12px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;pointer-events:none}
+.chip{background:rgba(255,255,255,.9);color:#121416;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600}
+#fallback{position:absolute;inset:0;display:none;place-items:center;padding:24px;text-align:center;color:var(--mute)}
+label.sel{display:block;font-size:13px;color:var(--mute);margin-top:10px}
+label.sel select{width:100%;margin-top:4px;font-size:16px}
+.meter{height:12px;background:var(--line);border-radius:6px;overflow:hidden;margin:6px 0 4px}
+.meter i{display:block;height:100%;background:var(--mat);border-radius:6px;transition:width .3s}
+.figs{display:flex;justify-content:space-between;font-size:13px;color:var(--mute)}.figs b{color:var(--ink);white-space:nowrap}
+.screen{background:#0b0d10;color:#dfe6ee;border-radius:10px;padding:12px;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;min-height:170px;white-space:pre-wrap;margin-top:8px;border:6px solid #2a2e33}
+.screen .t{color:#7fa8ff}.screen .w{color:#ffc24d}.screen .e{color:#ff6b57}
+.leds{display:flex;gap:10px;margin-top:10px}
+.led{display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--mute)}
+.led i{width:12px;height:12px;border-radius:3px;background:var(--line)}.led.on i{background:#ffb020;box-shadow:0 0 8px #ffb020}.led.err i{background:var(--led);box-shadow:0 0 8px var(--led)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.stats div{background:var(--panel);border-radius:10px;padding:8px}.stats small{display:block;font-size:12px;color:var(--mute)}.stats b{font-size:20px;white-space:nowrap}
+#log{font-size:13px;margin:10px 0 0;padding-left:18px;color:var(--mute)}#log li{margin:3px 0}
+.keys{font-size:13px;color:var(--mute);margin-top:14px}
+kbd{font:12px ui-monospace,monospace;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 5px}
+section+section{margin-top:22px}
+@media(max-width:900px){main{grid-template-columns:minmax(0,1fr)}#stage{order:-1;min-height:56vh}aside{max-height:none}#left,#right{border:0;border-top:1px solid var(--line)}}
+@media(max-width:600px){.logo{font-size:22px}header p{display:none}#stage{min-height:46vh}.keys{display:none}}
+@media(prefers-reduced-motion:reduce){.meter i{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">RIG<b>KIT</b></div>
+  <p>Build a desktop PC step by step in 3D, then power it on and see if it posts.</p>
+  <div class="tools">
+    <button id="undo" title="Undo last step (U)">Undo</button>
+    <button id="reset">Reset</button>
+    <button id="save">Save</button>
+  </div>
+</header>
+<main>
+  <aside id="left">
+    <h2>Build steps</h2>
+    <ol class="steps" id="steps"></ol>
+    <div class="card" id="card"></div>
+    <div class="keys"><kbd>Enter</kbd> do step · <kbd>U</kbd> undo · drag to orbit, scroll to zoom</div>
+  </aside>
+  <div id="stage">
+    <div id="fallback">The 3D bench needs WebGL. The steps and power-on test still work.</div>
+    <div class="hud"><span class="chip" id="hudStep">Step 1 of 10</span><span class="chip" id="hudPow">Power off</span></div>
+  </div>
+  <aside id="right">
+    <section>
+      <h2>Parts list</h2>
+      <div id="picks"></div>
+      <div style="margin-top:14px">
+        <div class="figs"><span>Estimated peak draw</span><b id="load"></b></div>
+        <div class="meter"><i id="meter"></i></div>
+        <div class="figs"><span>Suggested PSU (30% headroom)</span><b id="rec"></b></div>
+      </div>
+      <div id="compat"></div>
+      <p class="note">Power figures are manufacturer peak ratings for the CPU and graphics card, plus 60 W for everything else. Treat them as a guide.</p>
+    </section>
+    <section>
+      <h2>Monitor</h2>
+      <div class="screen" id="screen">No signal</div>
+      <div class="leds" id="leds"></div>
+      <div class="stats">
+        <div><small>CPU temp</small><b id="tC">–</b></div>
+        <div><small>CPU fan</small><b id="fan">–</b></div>
+        <div><small>Load</small><b id="lw">–</b></div>
+      </div>
+      <div class="row"><button class="red" id="pwr" disabled>Power button</button><button id="stress" disabled>Stress test</button></div>
+      <ol id="log"></ol>
+    </section>
+  </aside>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+{
+const $=s=>document.querySelector(s);
+const P={
+ cpu:[{n:'AMD Ryzen 5 7600',s:'AM5',w:88},{n:'AMD Ryzen 7 7800X3D',s:'AM5',w:162},{n:'Intel Core i5-14600K',s:'LGA1700',w:181},{n:'Intel Core i7-14700K',s:'LGA1700',w:253}],
+ board:[{n:'B650 ATX (AM5, DDR5)',s:'AM5',m:'DDR5'},{n:'X670E ATX (AM5, DDR5)',s:'AM5',m:'DDR5'},{n:'B760 ATX (LGA1700, DDR5)',s:'LGA1700',m:'DDR5'},{n:'B760 ATX (LGA1700, DDR4)',s:'LGA1700',m:'DDR4'}],
+ ram:[{n:'32 GB DDR5-6000 (2 × 16 GB)',m:'DDR5'},{n:'32 GB DDR4-3600 (2 × 16 GB)',m:'DDR4'}],
+ gpu:[{n:'GeForce RTX 4060 (115 W)',w:115},{n:'GeForce RTX 4070 Super (220 W)',w:220},{n:'Radeon RX 7900 XT (315 W)',w:315},{n:'GeForce RTX 4090 (450 W)',w:450}],
+ psu:[{n:'550 W',w:550},{n:'650 W',w:650},{n:'750 W',w:750},{n:'850 W',w:850},{n:'1000 W',w:1000}]
+};
+const LBL={cpu:'Processor',board:'Motherboard',ram:'Memory',gpu:'Graphics card',psu:'Power supply'};
+const CABLES=[
+ {k:'atx',n:'24-pin ATX → motherboard',d:'Main board power.'},
+ {k:'eps',n:'8-pin EPS → CPU power (top left)',d:'Not the same plug as PCIe.'},
+ {k:'pcie',n:'PCIe power → graphics card',d:'Use separate cables if the card takes two or more.'},
+ {k:'fan',n:'CPU cooler fan → CPU_FAN header',d:''},
+ {k:'fp',n:'Front panel → F_PANEL (power switch, LEDs)',d:'Check the manual for pin order.'},
+ {k:'usb',n:'Front USB and audio headers',d:''}
+];
+const STEPS=[
+ {t:'Gather the parts',b:'Pick each part on the right. The checker matches the CPU socket to the board, the memory type to the board, and the power draw to the PSU. Build on a hard table, not on carpet.'},
+ {t:'Seat the CPU',b:'Touch bare metal on the case first, or wear a wrist strap, to discharge static. Lift the socket lever, then lower the CPU straight in. Don\'t press it down. Close the lever. On Intel boards the plastic cover pops off as you do.',q:'How do you line it up?',o:['Match the small triangle on the CPU corner to the marker on the socket','Turn it until it seems to fit, then press firmly'],ok:0,f:['', 'bent']},
+ {t:'Install the M.2 SSD',b:'Unscrew the M.2 heatsink, slide the drive in at about 30°, press it flat, and secure it with the screw or latch.',q:'The heatsink\'s thermal pad has a plastic film on it.',o:['Peel the film off before refitting','Leave it on'],ok:0,f:['','ssdwarm']},
+ {t:'Install the memory',b:'Open the slot clips. Push down on both ends of each stick until the clips snap shut. Line up the notch first so you don\'t force it.',q:'You have two sticks. Which slots?',o:['A2 + B2, the 2nd and 4th from the CPU','A1 + A2, the two nearest the CPU','A1 + B1'],ok:0,f:['','single','ramslot']},
+ {t:'Mount the CPU cooler',b:'Many coolers come with paste already on them. If yours doesn\'t, a pea-sized dot in the middle is enough. Peel the film off the cold plate. Tighten the screws a few turns at a time in an X pattern.',q:'What goes between the CPU and the cooler?',o:['Paste (pre-applied or a pea-sized dot), film removed','Paste, but the cold-plate film left on','Nothing'],ok:0,f:['','hot','hot']},
+ {t:'Mount the motherboard',b:'Clip the I/O shield in from inside the case (skip this if it\'s built into the board). Lower the board at an angle so the ports go into the shield, then screw it down. Snug, not tight.',q:'The case came with standoffs already installed.',o:['Keep only the standoffs that line up with the board\'s holes','Leave them all in'],ok:0,f:['','short']},
+ {t:'Install the power supply',b:'Slide it in at the bottom rear and fix it with four screws at the back. Modular PSU? Plug in the cables you need first.',q:'Which way does its fan face?',o:['Down, over the dust filter (vented floor)','Up, into the case'],ok:0,f:['','psuup']},
+ {t:'Install the graphics card',b:'Remove the slot covers for the card\'s width. Open the latch on the PCIe slot and press the card in until the latch clicks. Then screw the bracket in.',q:'Which slot?',o:['The top full-length x16 slot','The bottom full-length slot'],ok:0,f:['','x4']},
+ {t:'Connect the cables',b:'Tick each cable as you plug it in. Route them behind the tray where you can.',cab:true},
+ {t:'Power on',b:'Plug the monitor into the graphics card, not the motherboard. Flip the PSU switch to I, then press the case power button.'}
+];
+const ISS={bent:['e','Bent socket pins from forcing the CPU'],ssdwarm:['w','SSD pad film left on: the drive will run hot and may throttle'],single:['w','A1 + A2 share one channel, so memory runs single-channel (slower)'],ramslot:['w','A1 + B1 works, but the board manual says A2 + B2'],hot:['e','No proper thermal contact between the CPU and the cooler'],short:['e','An extra standoff is shorting the back of the board'],psuup:['w','PSU fan faces up, so it pulls in the graphics card\'s hot air'],x4:['w','The bottom slot is wired x4, so the card runs slower']};
+
+let S={sel:{cpu:1,board:0,ram:0,gpu:1,psu:2},done:[],ch:{},cab:{}};
+try{const s=JSON.parse(localStorage.getItem('rigkit')||'null');if(s&&s.sel)S=s}catch(e){}
+let on=false,temp=0,rpm=0,loadW=0,timers=[],heatT=null;
+const cur=()=>S.done.length;
+const pick=k=>P[k][S.sel[k]];
+function power(){const l=pick('cpu').w+pick('gpu').w+60;return{l,rec:Math.ceil(l*1.3/50)*50}}
+function compat(){const e=[],w=[];if(pick('cpu').s!==pick('board').s)e.push(`${pick('cpu').n} needs an ${pick('cpu').s} board`);if(pick('ram').m!==pick('board').m)e.push(`This board takes ${pick('board').m}, not ${pick('ram').m}`);const p=power();if(pick('psu').w<p.l)e.push(`${pick('psu').n} can't cover an estimated ${p.l} W peak`);else if(pick('psu').w<p.rec)w.push(`${pick('psu').n} works but leaves little headroom`);return{e,w}}
+function issues(){const out=[];for(const i in S.ch){const st=STEPS[i],f=st.f&&st.f[S.ch[i]];if(f)out.push(f)}return out}
+
+/* ---------- UI ---------- */
+function renderPicks(){
+ $('#picks').innerHTML=Object.keys(P).map(k=>`<label class="sel">${LBL[k]}<select id="p-${k}" ${cur()>0?'disabled':''}>${P[k].map((x,i)=>`<option value="${i}" ${i==S.sel[k]?'selected':''}>${x.n}</option>`).join('')}</select></label>`).join('');
+ Object.keys(P).forEach(k=>$('#p-'+k).onchange=e=>{S.sel[k]=+e.target.value;renderAll()});
+ const p=power(),c=compat();
+ $('#load').textContent=p.l+' W';$('#rec').textContent=p.rec+' W';
+ $('#meter').style.width=Math.min(100,p.l/pick('psu').w*100)+'%';
+ $('#meter').style.background=p.l>pick('psu').w?'var(--led)':p.rec>pick('psu').w?'var(--warn)':'var(--mat)';
+ $('#compat').innerHTML=c.e.map(x=>`<div class="msg bad">${x}</div>`).join('')+c.w.map(x=>`<div class="msg">${x}</div>`).join('')+(!c.e.length&&!c.w.length?'<div class="msg good">All parts are compatible.</div>':'')+(cur()>0?'<p class="note">Parts are locked once you start. Reset to change them.</p>':'');
+}
+function renderSteps(){
+ const iss=issues();
+ $('#steps').innerHTML=STEPS.map((s,i)=>{const f=s.f&&S.ch[i]!=null&&s.f[S.ch[i]];const cls=i<cur()?'done'+(f?' warn':''):i==cur()?'cur':'';return`<li class="${cls}"><span class="dot">${i<cur()?(f?'!':'✓'):i+1}</span>${s.t}</li>`}).join('');
+ const i=cur(),s=STEPS[i];
+ $('#hudStep').textContent=i>=STEPS.length?'Build complete':`Step ${i+1} of ${STEPS.length}`;
+ if(i>=STEPS.length){$('#card').innerHTML=`<h2>Done</h2><h3>Your PC is built</h3><p>Use the power button under the monitor. If it doesn't post, the debug LEDs and the log tell you where it stopped.</p>${iss.map(k=>`<div class="msg ${ISS[k][0]=='e'?'bad':''}">${ISS[k][1]}</div>`).join('')}<div class="row"><button id="again">Power-on test again</button></div>`;$('#again').onclick=pressPower;return}
+ let h=`<h2>Step ${i+1}</h2><h3>${s.t}</h3><p>${s.b}</p>`;
+ if(s.q)h+=`<p><b>${s.q}</b></p>`+s.o.map((o,j)=>`<label class="opt"><input type="radio" name="q" value="${j}" ${S.ch[i]==j?'checked':''}>${o}</label>`).join('');
+ if(s.cab)h+=CABLES.map(c=>`<label class="opt"><input type="checkbox" data-c="${c.k}" ${S.cab[c.k]?'checked':''}><span>${c.n}${c.d?`<br><span class="note">${c.d}</span>`:''}</span></label>`).join('');
+ const c=compat();
+ if(i==0&&c.e.length)h+=`<div class="msg bad">Fix the incompatible parts first.</div>`;
+ h+=`<div class="row"><button class="pri" id="go" ${i==0&&c.e.length?'disabled':''}>${i==STEPS.length-1?'Flip the PSU switch':'Done, next step'}</button></div><div id="stepmsg"></div>`;
+ $('#card').innerHTML=h;
+ $('#go').onclick=doStep;
+ document.querySelectorAll('[data-c]').forEach(x=>x.onchange=()=>{S.cab[x.dataset.c]=x.checked;sync3d(false)});
+}
+function renderAll(){renderPicks();renderSteps();$('#undo').disabled=!cur();$('#pwr').disabled=cur()<STEPS.length;if(three)sync3d(false)}
+function doStep(){
+ const i=cur(),s=STEPS[i];
+ if(s.q){const r=document.querySelector('input[name=q]:checked');if(!r){$('#stepmsg').innerHTML='<div class="msg">Choose an option first.</div>';return}S.ch[i]=+r.value}
+ S.done.push(i);renderAll();sync3d(true);
+ if(i==STEPS.length-1)setTimeout(pressPower,700);
+}
+function undo(){if(!cur())return;powerOff(true);const i=S.done.pop();delete S.ch[i];renderAll();sync3d(false)}
+$('#undo').onclick=undo;
+$('#reset').onclick=()=>{powerOff(true);S={sel:S.sel,done:[],ch:{},cab:{}};renderAll();sync3d(false);log([],true)};
+$('#save').onclick=()=>{try{localStorage.setItem('rigkit',JSON.stringify(S));$('#save').textContent='Saved'}catch(e){$('#save').textContent='Can\'t save here'}setTimeout(()=>$('#save').textContent='Save',1400)};
+document.addEventListener('keydown',e=>{if(/INPUT|SELECT|TEXTAREA/.test(e.target.tagName)&&e.key!=='Enter')return;if(e.key==='Enter'&&$('#go')&&!$('#go').disabled&&e.target.tagName!=='BUTTON'){e.preventDefault();doStep()}if(e.key==='u'||e.key==='U')undo()});
+
+/* ---------- Power-on sim ---------- */
+const LEDS=['CPU','DRAM','VGA','BOOT'];
+function setLeds(st){$('#leds').innerHTML=LEDS.map((n,i)=>`<span class="led ${st[i]||''}"><i></i>${n}</span>`).join('');if(three)LEDS.forEach((n,i)=>ledMesh[i].material.color.set(st[i]=='err'?0xe5402a:st[i]=='on'?0xffb020:0x333333))}
+function log(lines,clear){if(clear)$('#log').innerHTML='';lines.forEach(t=>$('#log').insertAdjacentHTML('beforeend',`<li>${t}</li>`))}
+function screen(h){$('#screen').innerHTML=h}
+function later(ms,f){timers.push(setTimeout(f,ms))}
+function stats(){$('#tC').textContent=on?Math.round(temp)+' °C':'–';$('#fan').textContent=on?Math.round(rpm)+' rpm':'–';$('#lw').textContent=on?Math.round(loadW)+' W':'–';$('#hudPow').textContent=on?'Power on':'Power off';$('#pwr').textContent=on?'Power off':'Power button';$('#stress').disabled=!on||!S.posted}
+function powerOff(silent){timers.forEach(clearTimeout);timers=[];clearInterval(heatT);on=false;rpm=0;temp=0;loadW=0;S.posted=false;setLeds([]);if(!silent)log(['Powered off.']);screen('No signal');stats()}
+function fixBtn(step,why){return`<div class="msg bad">${why}<div class="row"><button class="pri" onclick="window.rkBack(${step})">Go back to step ${step+1}</button></div></div>`}
+window.rkBack=n=>{powerOff(true);while(cur()>n){const i=S.done.pop();delete S.ch[i]}renderAll();sync3d(false)};
+function fail(step,why){log(['<b style="color:var(--led)">'+why+'</b>']);$('#card').insertAdjacentHTML('beforeend',fixBtn(step,why))}
+function pressPower(){
+ if(on){powerOff();return}
+ const iss=issues(),c=S.cab;log(['Pressed the power button.'],true);setLeds([]);
+ if(!c.fp)return fail(8,'Nothing happens. The power switch isn\'t connected to the F_PANEL header.');
+ if(!c.atx)return fail(8,'Nothing happens. The board has no 24-pin power.');
+ if(iss.includes('short')){on=true;rpm=600;stats();later(400,()=>{powerOff(true);fail(5,'The fans twitch, then everything stops. The PSU\'s short-circuit protection tripped, probably from an extra standoff.')});return}
+ on=true;temp=34;rpm=c.fan?1100:0;loadW=70;stats();setLeds(['on']);log(['Fans spin up. Debug LED: CPU.']);
+ later(1000,()=>{
+  if(!c.eps)return fail(8,'The CPU LED stays lit: no 8-pin EPS power to the CPU.');
+  if(iss.includes('bent'))return fail(1,'The CPU LED stays lit: bent socket pins. On a real board, check them with a flashlight and get help straightening them.');
+  setLeds(['','on']);log(['DRAM LED: memory training. A first DDR5 boot can take a minute or more (sped up here).']);
+  later(1600,()=>{
+   setLeds(['','','on']);log(['VGA LED: looking for a graphics card.']);
+   later(800,()=>{
+    if(!c.pcie)return fail(8,'The VGA LED stays lit and there\'s no picture: the graphics card has no PCIe power.');
+    setLeds(['','','','on']);S.posted=true;stats();
+    const w=iss.filter(k=>ISS[k][0]=='w');
+    let h=`<span class="t">UEFI BIOS Utility</span>\nCPU    ${pick('cpu').n}\nBoard  ${pick('board').n}\nMemory ${pick('ram').n}${iss.includes('single')?' <span class="w">(single channel)</span>':''}\nGPU    ${pick('gpu').n}${iss.includes('x4')?' <span class="w">(PCIe x4)</span>':''}\nM.2    NVMe SSD detected\n`;
+    if(!c.fan)h+=`\n<span class="e">CPU Fan Error! Press F1 to continue.</span>`;
+    h+=`\n<span class="w">No boot device. Insert install media and restart.</span>`;
+    screen(h);log(['POST passed. BOOT LED lit because no OS is installed yet: next, install Windows or Linux from a USB stick.',...w.map(k=>'Warning: '+ISS[k][1])]);
+    if(iss.includes('hot')||!c.fan){log([iss.includes('hot')?'CPU temperature is climbing fast…':'The CPU fan isn\'t plugged in. Temperature is climbing…']);heatT=setInterval(()=>{temp+=4.5;stats();if(temp>=98){clearInterval(heatT);powerOff(true);fail(iss.includes('hot')?4:8,iss.includes('hot')?'Thermal shutdown at about 98 °C: the cooler isn\'t making proper contact with the CPU (missing paste or film left on).':'Thermal shutdown: the CPU fan was never plugged into CPU_FAN.')}},250);return}
+    heatT=setInterval(()=>{temp+=(40-temp)*.1+(Math.random()-.5);stats()},400);
+   });
+  });
+ });
+}
+$('#pwr').onclick=pressPower;
+$('#stress').onclick=()=>{
+ const p=power();clearInterval(heatT);loadW=p.l;log([`Stress test: CPU and GPU at full load, about ${p.l} W.`]);stats();
+ if(pick('psu').w<p.l){later(1500,()=>{powerOff(true);fail(0,`It shuts off under load. The ${pick('psu').n} PSU hit its overcurrent protection.`)});return}
+ const tgt=pick('cpu').w>200?88:pick('cpu').s=='AM5'&&pick('cpu').w>150?82:74;
+ heatT=setInterval(()=>{temp+=(tgt-temp)*.08+(Math.random()-.5);rpm+=(1900-rpm)*.1;stats()},300);
+ later(5000,()=>log([`Stable at about ${tgt} °C after a few minutes of load.${pick('psu').w<p.rec?' The PSU is running close to its limit.':''} Build checked.`]));
+};
+
+/* ---------- 3D bench ---------- */
+let three=false,scene,cam,ren,ctl,parts={},board,fans=[],ledMesh=[],cables={},tw=[],pulse=null;
+function init3d(){
+ if(!window.THREE)return false;
+ const st=$('#stage');
+ try{ren=new THREE.WebGLRenderer({antialias:true,alpha:true})}catch(e){return false}
+ ren.setPixelRatio(Math.min(2,devicePixelRatio));st.prepend(ren.domElement);
+ scene=new THREE.Scene();cam=new THREE.PerspectiveCamera(38,1,1,600);cam.position.set(18,30,98);
+ if(THREE.OrbitControls){ctl=new THREE.OrbitControls(cam,ren.domElement);ctl.target.set(15,-6,0);ctl.enableDamping=true;ctl.maxPolarAngle=1.5;ctl.minDistance=35;ctl.maxDistance=190;ctl.update()}else cam.lookAt(12,-6,0);
+ scene.add(new THREE.HemisphereLight(0xffffff,0x8899bb,.85));const dl=new THREE.DirectionalLight(0xffffff,.75);dl.position.set(30,60,50);scene.add(dl);
+ const M=(c,o={})=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.6,metalness:.15},o));
+ const box=(w,h,d,c,o)=>new THREE.Mesh(new THREE.BoxGeometry(w,h,d),M(c,o));
+ const at=(m,x,y,z)=>(m.position.set(x,y,z),m);
+ const mat=box(130,.6,70,0x2c5ccf,{roughness:.95});at(mat,15,-23.3,5);scene.add(mat);
+ // case: rear at -x, front at +x, open side faces +z
+ const cs=new THREE.Group();const cc=0xe6e8eb;
+ [[45,46,.5,0,0,-10.5],[45,.6,21,0,22.7,0],[45,.6,21,0,-22.7,0],[.6,46,21,-22.2,0,0],[.6,46,21,22.2,0,0]].forEach(a=>cs.add(at(box(a[0],a[1],a[2],cc,{metalness:.1,roughness:.5}),a[3],a[4],a[5])));
+ const glass=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(45,46,21)),new THREE.LineBasicMaterial({color:0x8a94a6}));cs.add(glass);
+ for(let i=0;i<7;i++)cs.add(at(box(.3,1.2,3.2,0x666b72),-22.5,-3-i*1.6,-6));
+ scene.add(cs);
+ function fan(r,axis){const g=new THREE.Group();g.add(new THREE.Mesh(new THREE.CylinderGeometry(r*.28,r*.28,.8,20),M(0x111111)));for(let i=0;i<7;i++){const b=box(r*.7,.3,r*.32,0x1a1c1f);b.position.x=r*.5;b.rotation.x=.45;const p=new THREE.Group();p.add(b);p.rotation.y=i/7*Math.PI*2;g.add(p)}const fr=new THREE.Mesh(new THREE.TorusGeometry(r,.35,6,24),M(0x2a2d31));fr.rotation.x=Math.PI/2;const o=new THREE.Group();o.add(g,fr);if(axis=='x')o.rotation.z=Math.PI/2;fans.push({g,ax:'y'});return o}
+ [12,0,-11].forEach(y=>{const f=fan(5.5,'x');f.position.set(20.5,y,0);cs.add(f)});
+ // motherboard group (local origin = board centre)
+ board=new THREE.Group();
+ board.add(box(24.4,30.5,.2,0x1d2125));
+ board.add(at(box(4.6,4.6,.6,0x8a8f96,{metalness:.6}),-3,6,.4));
+ board.add(at(box(2.4,9,2.6,0x3a3f46,{metalness:.5}),-9.5,7,1.4),at(box(9,2.2,2.6,0x3a3f46,{metalness:.5}),-4,12.6,1.4),at(box(2,15,3,0x50565e,{metalness:.4}),-11.2,6.5,1.6));
+ board.add(at(box(5,5,1.2,0x3a3f46,{metalness:.5}),5,-9,.7),at(box(9,2.6,.4,0x2c3036),0,-1,.3));
+ [4.2,5.4,6.6,7.8].forEach(x=>board.add(at(box(.7,13.4,.8,0x0e0f11),x,6,.5)));
+ [-4,-11].forEach(y=>board.add(at(box(9,.8,1,0x0e0f11),-6,y,.6)));
+ board.add(at(box(1,6,1.4,0xe8e8e8),11.6,2,.8),at(box(2.2,1,1,0xe8e8e8),-10.5,14.4,.6));
+ for(let i=0;i<4;i++){const l=box(.6,.6,.4,0x333333);l.position.set(10.4,-2-i*1.1,.3);board.add(l);ledMesh.push(l)}
+ scene.add(board);
+ const BS=new THREE.Vector3(48,-7.6,-6),BF=new THREE.Vector3(-8.8,4.75,-9.4);
+ parts.board={o:board,start:BS,end:BF};
+ const add=(k,o,start,local,onB)=>{parts[k]={o,start:new THREE.Vector3(...start),local:local&&new THREE.Vector3(...local),onB};scene.add(o)};
+ add('cpu',box(4,4,.4,0xc9ccd1,{metalness:.8,roughness:.3}),[30,-22.7,26],[-3,6,.9],1);
+ add('ssd',box(8,2.2,.3,0x0f2d22),[38,-22.8,28],[0,-1,.65],1);
+ const ram=()=>{const g=new THREE.Group();g.add(box(.6,13.3,3.4,0x15171a,{metalness:.4}));g.add(at(box(.62,13.3,.5,0xff3b7a,{emissive:0x000000}),0,0,1.7));return g};
+ add('ram1',ram(),[46,-21.3,30],[5.4,6,2.3],1);add('ram2',ram(),[48,-21.3,30],[7.8,6,2.3],1);
+ const cool=new THREE.Group();cool.add(at(box(5,5,1.2,0xb87333,{metalness:.7,roughness:.35}),0,0,.6));cool.add(at(box(5,12,12,0xbfc4ca,{metalness:.6,roughness:.4}),0,0,7.2));const cf=fan(5.6,'x');cf.position.set(3.4,0,7.2);cool.add(cf);
+ add('cooler',cool,[58,-16.4,22],[-3,6,.9],1);
+ add('psu',(()=>{const g=new THREE.Group();g.add(box(15,8.6,14,0x1c1e21,{metalness:.4}));const f=fan(5,'');f.position.set(0,-4.5,0);g.add(f);return g})(),[-12,-18.7,27],null);parts.psu.end=new THREE.Vector3(-14.5,-17.9,0);
+ const gpu=new THREE.Group();gpu.add(box(30,4.5,12,0x2b2e33,{metalness:.5}));[-7,7].forEach(x=>{const f=fan(4.6,'');f.position.set(x,-2.5,0);gpu.add(f)});gpu.add(at(box(.4,4.5,12.4,0xaaaaaa,{metalness:.8}),-15.2,0,0));
+ add('gpu',gpu,[10,-20.7,30],null);parts.gpu.end=new THREE.Vector3(BF.x+1.8,BF.y-4-2.9,BF.z+6.6);
+ // cables (world coords, board installed)
+ const tube=(pts,r,c)=>{const m=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(...p))),40,r,8),M(c));m.visible=false;scene.add(m);return m};
+ cables.atx=tube([[-8,-13.4,4],[6,-12,4],[10,-4,0],[3.6,6.75,-7.6]],.9,0x16181a);
+ cables.eps=tube([[-18,-13.4,-3],[-21,-6,-8.5],[-21,18,-8.5],[-19.3,19.15,-8.2]],.45,0x16181a);
+ cables.pcie=tube([[-6,-13.4,5],[6,-11,8],[10,-5,6.5],[8,-3.2,3.6]],.5,0x16181a);
+ cables.fan=tube([[-12,7.4,8.6],[-9,13.4,6],[-8,16,-8.6]],.15,0x222222);
+ cables.fp=tube([[21.5,-21,-6],[10,-19,-8.6],[2,-10.2,-8.6]],.2,0x2c5ccf);
+ cables.usb=tube([[21.5,-20,-4],[6,-17,-8.6],[-2,-10.4,-8.6]],.3,0x333333);
+ let fitted=false;const ro=new ResizeObserver(()=>{const w=st.clientWidth,h=st.clientHeight;if(!w||!h)return;ren.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix();if(!fitted){fitted=true;const d=132/Math.min(1,cam.aspect*1.15);cam.position.set(15+d*.12,-6+d*.36,d*.93);ctl&&ctl.update()}});ro.observe(st);
+ let last=performance.now();
+ ren.setAnimationLoop(t=>{const dt=Math.min(.05,(t-last)/1000);last=t;
+  tw=tw.filter(a=>{const k=Math.min(1,(t-a.t0)/a.d),e=1-(1-k)**3;a.o.position.lerpVectors(a.a,a.b,e);a.o.position.y+=Math.sin(k*Math.PI)*a.h;if(k>=1){a.cb&&a.cb();return false}return true});
+  if(on)fans.forEach(f=>f.g.rotation.y+=dt*(rpm/60)*Math.PI*.5);
+  ['ram1','ram2'].forEach(k=>parts[k].o.children[1].material.emissive.setHSL(on?(t/3000)%1:0,1,on?.45:0));
+  if(pulse){const m=pulse;m.traverse(c=>{if(c.material&&c.material.emissive&&!(c.parent&&(c.parent===parts.ram1.o||c.parent===parts.ram2.o)))c.material.emissive.setRGB(.09+.09*Math.sin(t/220),.13+.13*Math.sin(t/220),.3+.3*Math.sin(t/220))})}
+  ctl&&ctl.update();ren.render(scene,cam)});
+ return true;
+}
+const STEP_PARTS={1:['cpu'],2:['ssd'],3:['ram1','ram2'],4:['cooler'],5:['board'],6:['psu'],7:['gpu']};
+function clearPulse(){if(pulse)pulse.traverse(c=>{if(c.material&&c.material.emissive&&!(c.parent===parts.ram1.o||c.parent===parts.ram2.o))c.material.emissive.setRGB(0,0,0)});pulse=null}
+function sync3d(animate){
+ if(!three)return;
+ const ramX=[[5.4,7.8],[4.2,5.4],[4.2,6.6]][S.ch[3]||0];parts.ram1.local.x=ramX[0];parts.ram2.local.x=ramX[1];
+ const n=cur(),last=S.done[n-1];
+ for(const s in STEP_PARTS)STEP_PARTS[s].forEach(k=>{
+  const p=parts[k],inst=n>+s,anim=animate&&+s===last&&inst;
+  if(k==='board'){const to=inst?p.end:p.start;if(anim)tw.push({o:board,a:board.position.clone(),b:to.clone(),t0:performance.now(),d:1400,h:10});else board.position.copy(to);return}
+  if(p.onB){
+   if(inst&&!anim){board.add(p.o);p.o.position.copy(p.local)}
+   else if(inst&&anim){scene.add(p.o);const to=board.position.clone().add(p.local);tw.push({o:p.o,a:p.start.clone(),b:to,t0:performance.now(),d:1100,h:12,cb:()=>{board.add(p.o);p.o.position.copy(p.local)}})}
+   else{scene.add(p.o);p.o.position.copy(p.start)}
+  }else{const to=inst?p.end:p.start;if(anim)tw.push({o:p.o,a:p.start.clone(),b:to.clone(),t0:performance.now(),d:1200,h:14});else p.o.position.copy(to)}
+ });
+ for(const k in cables)cables[k].visible=n>8&&!!S.cab[k]||(n===8&&!!S.cab[k]);
+ clearPulse();const nx=STEP_PARTS[n];if(nx)pulse=parts[nx[0]].o;
+}
+three=init3d();
+if(!three)$('#fallback').style.display='grid';
+setLeds([]);stats();renderAll();sync3d(false);
+}
+</script>
+</body>
+</html>
